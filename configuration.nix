@@ -4,7 +4,9 @@
 
 { config, pkgs, ... }:
 
-{
+rec {
+  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings.trusted-users = [ "root" "@wheel" ];
   # basic {{{ #
   imports =
     [
@@ -14,12 +16,12 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
   boot.kernelPackages = pkgs.linuxPackages_latest;
-  boot.tmpOnTmpfs = true;
+  boot.tmp.useTmpfs = true;
   # https://discourse.nixos.org/t/i915-driver-has-bug-for-iris-xe-graphics/25006
   boot.kernelParams = [ "i915.enable_psr=0" ];
 
   nix.settings.substituters = [ "https://mirrors.bfsu.edu.cn/nix-channels/store" ];
-  nixpkgs.config = { allowUnfree = true; };
+  nixpkgs.config.allowUnfree = true;
   hardware.enableAllFirmware = true;
 
   security.sudo.wheelNeedsPassword = false;
@@ -45,7 +47,7 @@
   users.defaultUserShell = pkgs.zsh;
   users.users.wzy = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" "input" ];
+    extraGroups = [ "wheel" "networkmanager" "input" "docker" ];
   };
 
   # List services that you want to enable:
@@ -69,11 +71,14 @@
 
   # GUI {{{ #
   # Select internationalisation properties.
-  i18n.inputMethod = {
-    enabled = "fcitx5";
-  };
-  i18n.inputMethod.fcitx5.enableRimeData = true;
+  i18n.inputMethod.enabled =
+    if
+      services.xserver.displayManager.defaultSession == "gnome" then
+      "ibus"
+    else
+      "fcitx5";
   i18n.inputMethod.fcitx5.addons = [ pkgs.fcitx5-rime ];
+  i18n.inputMethod.ibus.engines = with pkgs.ibus-engines; [ rime ];
 
   fonts.enableDefaultFonts = true;
   fonts.fontDir.enable = true;
@@ -86,14 +91,26 @@
   services.xserver.enable = true;
   services.xserver.libinput.enable = true;
   # Configure keymap in X11
-  services.xserver.desktopManager.lxqt.enable = true;
-  services.xserver.displayManager.defaultSession = "lxqt";
+  services.xserver.displayManager.defaultSession = "gnome";
+  services.xserver.desktopManager.gnome.enable = services.xserver.displayManager.defaultSession == "gnome";
+  services.xserver.displayManager.gdm.enable = services.xserver.displayManager.defaultSession == "gnome";
+  # https://github.com/wez/wezterm/issues/3766
+  # services.xserver.displayManager.gdm.wayland = false;
+
+  services.xserver.desktopManager.plasma5.enable = services.xserver.displayManager.defaultSession == "plasma";
+  services.xserver.displayManager.sddm.enable = services.xserver.displayManager.defaultSession == "plasma";
+
+  services.xserver.desktopManager.lxqt.enable = services.xserver.displayManager.defaultSession == "lxqt";
+
+  services.xserver.desktopManager.xfce.enable = services.xserver.displayManager.defaultSession == "xfce";
+
   services.xserver.displayManager.lightdm.greeters.slick.font.name = "Ubuntu 24";
   # https://github.com/Freed-Wu/my-x11-keymaps
-  services.xserver.xkbDir = "/usr/share/X11/xkb";
+  services.xserver.xkbDir = ./xkb;
 
+  services.touchegg.enable = true;
   services.picom = {
-    enable = true;
+    enable = services.xserver.displayManager.defaultSession != "gnome" && services.xserver.displayManager.defaultSession != "plasma";
     fade = true;
     inactiveOpacity = 0.95;
     settings = {
@@ -126,6 +143,10 @@
   # Enable CUPS to print documents.
   services.printing.enable = true;
 
+  services.xserver.excludePackages = [
+    pkgs.xterm
+  ];
+
   # Enable sound.
   sound.enable = true;
   hardware.pulseaudio.enable = true;
@@ -133,21 +154,42 @@
   environment.lxqt.excludePackages = [
     pkgs.lxqt.qterminal
   ];
+  environment.gnome.excludePackages = [
+    pkgs.gnome-console
+    pkgs.gnome.epiphany
+    pkgs.gnome.evince
+  ];
+  environment.plasma5.excludePackages = [
+    pkgs.plasma5Packages.konsole
+    pkgs.plasma5Packages.konqueror
+    pkgs.plasma5Packages.okular
+  ];
   # }}} GUI #
 
   nixpkgs.config.packageOverrides = pkgs: {
-    nur = import (builtins.fetchTarball "https://github.com/nix-community/NUR/archive/master.tar.gz") {
-      inherit pkgs;
-    };
+    nur = import
+      (
+        builtins.fetchTarball
+          "https://github.com/nix-community/NUR/archive/master.tar.gz"
+      )
+      {
+        inherit pkgs;
+      };
   };
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs;
     [
+      man-pages
+      man-pages-posix
+      glibcInfo
       # python {{{ #
       (
         python3.withPackages (
           p: with p; [
+            openai
+            polib
+            build
             gdown
             isort
             pudb
@@ -157,7 +199,6 @@
             beautifulsoup4
             lxml
             pandas
-            pre-commit
             pytest
             pip
             dbus-python
@@ -168,24 +209,33 @@
             torchmetrics
             sphinx
             py-cpuinfo
+            nur.repos.Freed-Wu.mulimgviewer
+            nur.repos.Freed-Wu.help2man
+            nur.repos.Freed-Wu.translate-shell
+            nur.repos.Freed-Wu.repl-python-wakatime
+            nur.repos.Freed-Wu.repl-python-codestats
           ]
         )
       )
-      # trash-cli need to create some symlinks
       trash-cli
+      visidata
       asciinema
       pdd
       grc
       hyfetch
+      pre-commit
+      cmake-language-server
       # }}} python #
       # perl {{{ #
       (
         perl.withPackages (
           p: with p; [
             PerlTidy
+            po4a
           ]
         )
       )
+      rename
       exiftool
       parallel
       # }}} perl #
@@ -193,7 +243,8 @@
       (
         ruby.withPackages (
           p: with p; [
-            jekyll
+            solargraph
+            rubocop
           ]
         )
       )
@@ -203,6 +254,10 @@
       nodePackages.gitmoji-cli
       # }}} nodejs #
       # rust {{{ #
+      nix-index
+      manix
+      rnix-lsp
+      cargo
       firefox
       wezterm
       onefetch
@@ -218,19 +273,22 @@
       hyperfine
       nixpkgs-fmt
       texlab
+      typst
+      typst-lsp
       # }}} rust #
       # go {{{ #
+      go
+      actionlint
       fzf
       scc
       direnv
       gh
       wakatime
       gdu
-      docker
       shfmt
       git-lfs
       cog
-      rime-cli
+      nix-build-uncached
       # }}} go #
       # shell {{{ #
       wgetpaste
@@ -244,19 +302,27 @@
       # haskell {{{ #
       shellcheck
       pandoc
+      cachix
       # }}} haskell #
       # f# {{{ #
       marksman
       # }}} f# #
       # java {{{ #
+      jdk
       pdftk
       # }}} java #
       # c {{{ #
+      graphicsmagick
+      sqlite
       hello
       lsb-release
+      gtk3
+      glib
       xdotool
       autoconf
       automake
+      pkg-config
+      readline
       gnumake
       gcc
       gdb
@@ -286,39 +352,53 @@
       moreutils
       bc
       num-utils
-      xsel
       espeak-classic
+      gettext
       # }}} c #
       # c++ {{{ #
+      qq
+      clang-tools
       cmake
+      ninja
+      cling
       x265
       aria2
       lftp
       libsForQt5.yuview
       luaformatter
+      lua-language-server
       chafa
       patchelf
       ansifilter
       libreoffice-fresh
+      nur.repos.linyinfeng.wemeet
+      nur.repos.Freed-Wu.netease-cloud-music
       # }}} c++ #
-    ];
+      xsel
+    ] ++ (if services.xserver.desktopManager.gnome.enable then [
+      gnome.gnome-tweaks
+      gnomeExtensions.gtk4-desktop-icons-ng-ding
+      gnomeExtensions.clipboard-indicator
+      nur.repos.Freed-Wu.g3kb-switch
+    ] else [ ]);
+  # wl-clipboard breaks vim / firefox
+  # ++ (
+  #   if services.xserver.displayManager.gdm ? wayland && ! services.xserver.displayManager.gdm.wayland then
+  #     [ xsel ]
+  #   else [ wl-clipboard ]
+  # );
 
   # program {{{ #
+  virtualisation.docker.enable = true;
+  virtualisation.docker.storageDriver = "btrfs";
+  virtualisation.docker.autoPrune.enable = true;
+  virtualisation.docker.rootless.enable = true;
+  virtualisation.docker.rootless.setSocketVariable = true;
+
   services.dockerRegistry.enable = true;
   services.dockerRegistry.enableDelete = true;
   services.dockerRegistry.enableGarbageCollect = true;
   services.v2raya.enable = true;
-  # https://github.com/NixOS/nixpkgs/issues/213989
-  services.snapper.configs = {
-    root = {
-      subvolume = "/";
-      extraConfig = ''
-        ALLOW_GROUPS="wheel"
-        TIMELINE_CREATE=yes
-        TIMELINE_CLEANUP=yes
-      '';
-    };
-  };
 
   programs.proxychains.enable = true;
   programs.proxychains.proxies = {
@@ -329,7 +409,7 @@
     };
   };
   programs.less.envVariables = {
-    LESS = "--mouse --chop-long-lines -I -R -M";
+    LESS = "--mouse -S -I -R -M";
   };
   programs.tmux.terminal = "screen-256color";
 
