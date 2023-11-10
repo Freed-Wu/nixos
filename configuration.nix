@@ -49,7 +49,8 @@ rec {
   # Define a user account. Don't forget to set a password with ‘passwd’.
   users.defaultUserShell = pkgs.zsh;
   users.users.wzy.isNormalUser = true;
-  users.users.wzy.extraGroups = [ "wheel" "networkmanager" "input" "docker" ];
+  users.users.wzy.description = "Wu Zhenyu";
+  users.users.wzy.extraGroups = [ "wheel" "networkmanager" "input" "docker" "dialout" ];
 
   # List services that you want to enable:
 
@@ -157,9 +158,9 @@ rec {
   ];
   environment.gnome.excludePackages = [
     pkgs.gnome-console
-    pkgs.gnome.gedit
-    pkgs.gnome.epiphany
-    pkgs.gnome.evince
+    pkgs.gedit
+    pkgs.epiphany
+    pkgs.evince
   ];
   environment.plasma5.excludePackages = [
     pkgs.plasma5Packages.konsole
@@ -180,64 +181,62 @@ rec {
       (
         python3.withPackages (
           p: with p; [
-            identify
-            pyserial
-            pypinyin
-            pypandoc
-            jsonschema
-            rfc3987
-            fqdn
-            nvchecker
-            openai
-            tree-sitter
-            # XXX: https://github.com/NixOS/nixpkgs/issues/250245
-            # wandb
-            polib
-            build
-            gdown
-            isort
-            pudb
-            ptpython
+            # color
             rich
             colorama
+            # tool
+            # https://github.com/petronny/pinyin-completion
+            pypinyin
+            # https://translate-shell.readthedocs.io/en/latest/resources/requirements.html#repl
+            jedi
+            gdown
+            # PKGBUILD
+            nvchecker
+            # develop
+            pip
+            build
+            ruff-lsp
+            # debug
+            ptpython
+            pudb
+            pytest
+            pytest-pudb
+            # data science
             beautifulsoup4
             lxml
             pandas
-            pytest
-            pip
-            dbus-python
-            jedi-language-server
+            # deep learning
+            openai
+            wandb
             tensorboard
             torchWithoutCuda
             torchvision
             torchmetrics
-            myst-parser
-            py-cpuinfo
+            # misc
             nur.repos.Freed-Wu.mulimgviewer
-            nur.repos.Freed-Wu.help2man
             nur.repos.Freed-Wu.translate-shell
-            nur.repos.Freed-Wu.repl-python-codestats
-            # XXX: Could not resolve host: github.com
+            nur.repos.Freed-Wu.repl-python-wakatime
+            # TODO: https://github.com/NixOS/nixpkgs/issues/263630
             # nur.repos.Freed-Wu.autotools-language-server
             # nur.repos.Freed-Wu.bitbake-language-server
-            nur.repos.Freed-Wu.expect-language-server
-            nur.repos.Freed-Wu.mutt-language-server
-            # nur.repos.Freed-Wu.pkgbuild-language-server
-            # nur.repos.Freed-Wu.portage-language-server
-            # XXX: https://github.com/NixOS/nixpkgs/issues/241691
+            # nur.repos.Freed-Wu.expect-language-server
+            # nur.repos.Freed-Wu.mutt-language-server
+            # TODO: https://github.com/NixOS/nixpkgs/issues/241691
             # nur.repos.Freed-Wu.requirements-language-server
-            nur.repos.Freed-Wu.sublime-syntax-language-server
+            # nur.repos.Freed-Wu.sublime-syntax-language-server
             # nur.repos.Freed-Wu.termux-language-server
-            nur.repos.Freed-Wu.tmux-language-server
-            nur.repos.Freed-Wu.xilinx-language-server
-            nur.repos.Freed-Wu.zathura-language-server
+            # nur.repos.Freed-Wu.tmux-language-server
+            # nur.repos.Freed-Wu.xilinx-language-server
+            # nur.repos.Freed-Wu.zathura-language-server
           ]
         )
       )
       trash-cli
       visidata
       asciinema
+      asciinema-agg
       pdd
+      # http://github.com/zpm-zsh/colorize
       grc
       hyfetch
       pre-commit
@@ -272,8 +271,11 @@ rec {
       # }}} ruby #
       # nodejs {{{ #
       nodejs
+      nodePackages.yarn
       nodePackages.gitmoji-cli
-      # https://github.com/NixOS/nixpkgs/pull/245016
+      nodePackages.pyright
+      dot-language-server
+      # TODO: https://github.com/NixOS/nixpkgs/pull/245016
       # nodePackages.gitmoji-chanagelog
       # }}} nodejs #
       # lua {{{ #
@@ -292,6 +294,7 @@ rec {
       nagelfar
       # }}} tcl #
       # rust {{{ #
+      taplo
       manix
       nix-index-database
       tree-sitter
@@ -310,14 +313,15 @@ rec {
       delta
       bat
       ripgrep
-      # https://github.com/NixOS/nixpkgs/issues/250306
-      # ripgrep-all
+      ripgrep-all
       bottom
       hexyl
       hyperfine
       texlab
       typst
-      typst-lsp
+      # FIXME: https://github.com/NixOS/nixpkgs/issues/273835
+      # typst-lsp
+      asm-lsp
       # }}} rust #
       # go {{{ #
       go
@@ -335,15 +339,15 @@ rec {
       nix-build-uncached
       # }}} go #
       # shell {{{ #
+      emojify
       wgetpaste
       pass
       hr
       has
       lesspipe
-      # https://github.com/NixOS/nixpkgs/issues/257078
-      # bats
-      # bats.libraries.bats-support
-      # bats.libraries.bats-assert
+      bats
+      bats.libraries.bats-support
+      bats.libraries.bats-assert
       bash-completion
       zsh-completions
       zsh-powerlevel10k
@@ -362,10 +366,13 @@ rec {
       # }}} f# #
       # java {{{ #
       jdk
+      plantuml
       pdftk
       ltex-ls
       # }}} java #
       # c {{{ #
+      gimp
+      poppler_utils
       bear
       minicom
       socat
@@ -392,6 +399,8 @@ rec {
       gnumake
       gcc
       gdb
+      rr
+      valgrind
       nur.repos.Freed-Wu.gdb-prompt
       cgdb
       neomutt
@@ -409,7 +418,7 @@ rec {
       usbutils
       texlive.combined.scheme-full
       linux-firmware
-      p7zip
+      (p7zip.override { enableUnfree = true; })
       w3m
       elinks
       jq
@@ -424,8 +433,13 @@ rec {
       gettext
       progress
       ethtool
+      pstree
       # }}} c #
       # c++ {{{ #
+      openai-triton-llvm
+      libreoffice-fresh
+      watchman
+      cppcheck
       nixd
       qq
       clang-tools
@@ -441,10 +455,9 @@ rec {
       chafa
       patchelf
       ansifilter
-      libreoffice-fresh
       nur.repos.xddxdd.wechat-uos
       nur.repos.linyinfeng.wemeet
-      # https://github.com/NixOS/nixpkgs/pull/243429
+      # TODO: https://github.com/NixOS/nixpkgs/pull/243429
       nur.repos.Freed-Wu.netease-cloud-music
       # }}} c++ #
       xsel
@@ -452,11 +465,12 @@ rec {
       [
         gnome.gnome-tweaks
         gnome-randr
+        # https://extensions.gnome.org/extension/5263/gtk4-desktop-icons-ng-ding/
         gnomeExtensions.gtk4-desktop-icons-ng-ding
         gnomeExtensions.clipboard-indicator
         gnomeExtensions.appindicator
         gnomeExtensions.screen-rotate
-        # https://github.com/NixOS/nixpkgs/pull/243032
+        # TODO: https://github.com/NixOS/nixpkgs/pull/243032
         nur.repos.Freed-Wu.g3kb-switch
       ]) ++ (lib.optionals
       (
@@ -485,6 +499,7 @@ rec {
   services.dockerRegistry.enableGarbageCollect = true;
   services.v2raya.enable = true;
 
+  programs.nix-ld.enable = true;
   programs.proxychains.enable = true;
   # https://github.com/NixOS/nixpkgs/pull/222667
   programs.proxychains.package = pkgs.proxychains-ng;
