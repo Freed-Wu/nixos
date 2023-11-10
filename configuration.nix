@@ -4,6 +4,13 @@
 
 { config, pkgs, lib, ... }:
 
+let
+  rimeDataPkgs = with pkgs; [
+    rime-data
+    nur.repos.Freed-Wu.rime-kaomoji
+    nur.repos.Freed-Wu.rime-japanese
+  ];
+in
 rec {
   # basic {{{ #
   imports =
@@ -13,7 +20,7 @@ rec {
     ];
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   nix.settings.trusted-users = [ "root" "@wheel" ];
-  nix.settings.substituters = [ "https://mirrors.bfsu.edu.cn/nix-channels/store" ];
+  nix.settings.substituters = [ "https://mirrors.ustc.edu.cn/nix-channels/store" ];
   nix.settings.use-xdg-base-directories = true;
 
   boot.loader.systemd-boot.enable = true;
@@ -23,8 +30,10 @@ rec {
 
   nixpkgs.config = import ~/.config/nixpkgs/config.nix;
   hardware.enableAllFirmware = true;
+  hardware.bluetooth.enable = true;
   hardware.sensor.iio.enable = true;
-  hardware.opengl.extraPackages = with pkgs; [
+  hardware.bluetooth.powerOnBoot = true;
+  hardware.graphics.extraPackages = with pkgs; [
     # intel-ocl
     intel-compute-runtime
   ];
@@ -49,7 +58,8 @@ rec {
   # Define a user account. Don't forget to set a password with ‘passwd’.
   users.defaultUserShell = pkgs.zsh;
   users.users.wzy.isNormalUser = true;
-  users.users.wzy.extraGroups = [ "wheel" "networkmanager" "input" "docker" ];
+  users.users.wzy.description = "Wu, Zhenyu";
+  users.users.wzy.extraGroups = [ "wheel" "networkmanager" "input" "docker" "dialout" ];
 
   # List services that you want to enable:
 
@@ -72,14 +82,19 @@ rec {
 
   # GUI {{{ #
   # Select internationalisation properties.
-  i18n.inputMethod.enabled =
+  i18n.inputMethod.enable = true;
+  i18n.inputMethod.type =
     if
-      services.xserver.displayManager.defaultSession == "gnome" then
+      services.displayManager.defaultSession == "gnome" then
       "ibus"
     else
       "fcitx5";
-  i18n.inputMethod.fcitx5.addons = [ pkgs.fcitx5-rime ];
-  i18n.inputMethod.ibus.engines = with pkgs.ibus-engines; [ rime ];
+  i18n.inputMethod.fcitx5.addons = with pkgs; [
+    (fcitx5-rime.override { rimeDataPkgs = rimeDataPkgs; })
+  ];
+  i18n.inputMethod.ibus.engines = with pkgs.ibus-engines; [
+    (rime.override { rimeDataPkgs = rimeDataPkgs; })
+  ];
 
   fonts.fontDir.enable = true;
   fonts.enableDefaultPackages = true;
@@ -90,26 +105,26 @@ rec {
   ];
   # Enable the X11 windowing system.
   services.xserver.enable = true;
-  services.xserver.libinput.enable = true;
+  services.libinput.enable = true;
   # Configure keymap in X11
-  services.xserver.displayManager.defaultSession = "gnome";
-  services.xserver.desktopManager.gnome.enable = services.xserver.displayManager.defaultSession == "gnome";
-  services.xserver.displayManager.gdm.enable = services.xserver.displayManager.defaultSession == "gnome";
+  services.displayManager.defaultSession = "gnome";
+  services.xserver.desktopManager.gnome.enable = services.displayManager.defaultSession == "gnome";
+  services.xserver.displayManager.gdm.enable = services.displayManager.defaultSession == "gnome";
 
-  services.xserver.desktopManager.plasma5.enable = services.xserver.displayManager.defaultSession == "plasma";
-  services.xserver.displayManager.sddm.enable = services.xserver.displayManager.defaultSession == "plasma";
+  services.xserver.desktopManager.plasma5.enable = services.displayManager.defaultSession == "plasma";
+  services.displayManager.sddm.enable = services.displayManager.defaultSession == "plasma";
 
-  services.xserver.desktopManager.lxqt.enable = services.xserver.displayManager.defaultSession == "lxqt";
+  services.xserver.desktopManager.lxqt.enable = services.displayManager.defaultSession == "lxqt";
 
-  services.xserver.desktopManager.xfce.enable = services.xserver.displayManager.defaultSession == "xfce";
+  services.xserver.desktopManager.xfce.enable = services.displayManager.defaultSession == "xfce";
 
   services.xserver.displayManager.lightdm.greeters.slick.font.name = "Ubuntu 24";
 
   # https://discourse.nixos.org/t/how-to-use-fingerprint-unlocking-how-to-set-up-fprintd-english/21901/2
-  services.fprintd.enable = true;
-  services.fprintd.tod.enable = true;
-  services.fprintd.tod.driver = pkgs.libfprint-2-tod1-goodix;
-  services.picom.enable = services.xserver.displayManager.defaultSession != "gnome" && services.xserver.displayManager.defaultSession != "plasma";
+  # services.fprintd.enable = true;
+  # services.fprintd.tod.enable = true;
+  # services.fprintd.tod.driver = pkgs.libfprint-2-tod1-goodix;
+  services.picom.enable = services.displayManager.defaultSession != "gnome" && services.displayManager.defaultSession != "plasma";
   services.picom.fade = true;
   services.picom.inactiveOpacity = 0.95;
   services.picom.settings = {
@@ -145,10 +160,6 @@ rec {
     pkgs.xterm
   ];
 
-  # Enable sound.
-  sound.enable = true;
-  hardware.pulseaudio.enable = true;
-
   environment.lxqt.excludePackages = [
     pkgs.lxqt.qterminal
   ];
@@ -157,9 +168,9 @@ rec {
   ];
   environment.gnome.excludePackages = [
     pkgs.gnome-console
-    pkgs.gnome.gedit
-    pkgs.gnome.epiphany
-    pkgs.gnome.evince
+    pkgs.gedit
+    pkgs.epiphany
+    pkgs.evince
   ];
   environment.plasma5.excludePackages = [
     pkgs.plasma5Packages.konsole
@@ -176,81 +187,90 @@ rec {
       man-pages
       man-pages-posix
       glibcInfo
+      windows10-icons
+      nur.repos.Freed-Wu.windows10-themes
+      # https://github.com/NixOS/nixpkgs/issues/298639
+      nur.repos.Freed-Wu.stardict-ecdict
+      nur.repos.Freed-Wu.stardict-langdao-ce-gb
+      nur.repos.Freed-Wu.stardict-langdao-ec-gb
+      nur.repos.Freed-Wu.stardict-jmdict-ja-en
+      nur.repos.Freed-Wu.stardict-jmdict-en-ja
       # python {{{ #
       (
         python3.withPackages (
           p: with p; [
-            identify
-            pyserial
-            pypinyin
-            pypandoc
-            jsonschema
-            rfc3987
-            fqdn
-            nvchecker
-            openai
-            tree-sitter
-            # XXX: https://github.com/NixOS/nixpkgs/issues/250245
-            # wandb
-            polib
-            build
-            gdown
-            isort
-            pudb
-            ptpython
+            # color
             rich
             colorama
+            # tool
+            # https://github.com/petronny/pinyin-completion
+            pypinyin
+            # https://translate-shell.readthedocs.io/en/latest/resources/requirements.html#repl
+            jedi
+            gdown
+            # keyring-pass
+            # PKGBUILD
+            nvchecker
+            # develop
+            pip
+            build
+            # debug
+            ptpython
+            pudb
+            pytest
+            pytest-pudb
+            # data science
             beautifulsoup4
             lxml
             pandas
-            pytest
-            pip
-            dbus-python
-            jedi-language-server
+            # deep learning
+            openai
+            # https://github.com/NixOS/nixpkgs/issues/280861
+            # wandb
             tensorboard
             torchWithoutCuda
             torchvision
             torchmetrics
-            myst-parser
-            py-cpuinfo
-            nur.repos.Freed-Wu.mulimgviewer
-            nur.repos.Freed-Wu.help2man
+            # misc
+            # wxpython doesn't support python 3.12
+            # nur.repos.Freed-Wu.mulimgviewer
+            nur.repos.Freed-Wu.pyrime
             nur.repos.Freed-Wu.translate-shell
-            nur.repos.Freed-Wu.repl-python-codestats
-            # XXX: Could not resolve host: github.com
-            # nur.repos.Freed-Wu.autotools-language-server
-            # nur.repos.Freed-Wu.bitbake-language-server
-            nur.repos.Freed-Wu.expect-language-server
             nur.repos.Freed-Wu.mutt-language-server
-            # nur.repos.Freed-Wu.pkgbuild-language-server
-            # nur.repos.Freed-Wu.portage-language-server
-            # XXX: https://github.com/NixOS/nixpkgs/issues/241691
-            # nur.repos.Freed-Wu.requirements-language-server
-            nur.repos.Freed-Wu.sublime-syntax-language-server
-            # nur.repos.Freed-Wu.termux-language-server
             nur.repos.Freed-Wu.tmux-language-server
-            nur.repos.Freed-Wu.xilinx-language-server
             nur.repos.Freed-Wu.zathura-language-server
+            nur.repos.Freed-Wu.autotools-language-server
+            nur.repos.Freed-Wu.termux-language-server
+            nur.repos.Freed-Wu.requirements-language-server
+            nur.repos.Freed-Wu.sublime-syntax-language-server
+            nur.repos.Freed-Wu.expect-language-server
+            nur.repos.Freed-Wu.xilinx-language-server
           ]
         )
       )
+      # mesonlsp needs it
+      meson
+      vim-vint
+      yamllint
       trash-cli
       visidata
       asciinema
+      asciinema-agg
       pdd
+      # http://github.com/zpm-zsh/colorize
       grc
       hyfetch
       pre-commit
       doq
-      cmake-format
-      cmake-language-server
+      ruff-lsp
+      bitbake-language-server
+      nur.repos.mic92.gdb-dashboard
       # }}} python #
       # perl {{{ #
       (
         perl.withPackages (
           p: with p; [
             PerlTidy
-            po4a
             PerlLanguageServer
           ]
         )
@@ -272,18 +292,25 @@ rec {
       # }}} ruby #
       # nodejs {{{ #
       nodejs
-      nodePackages.gitmoji-cli
-      # https://github.com/NixOS/nixpkgs/pull/245016
+      yarn-berry
+      web-ext
+      gitmoji-cli
+      alex
+      write-good
+      nodePackages.ts-node
+      # TODO: https://github.com/NixOS/nixpkgs/pull/245016
       # nodePackages.gitmoji-chanagelog
       # }}} nodejs #
       # lua {{{ #
       lua-language-server
       (
-        lua.withPackages (
+        # rocks.nvim needs luarocks 5.1
+        luajit.withPackages (
           p: with p; [
             # pre-commit needs it
-            luarocks
-            luacheck
+            luarocks-nix
+            luasec
+            nur.repos.Freed-Wu.luajit-prompt-style
           ]
         )
       )
@@ -292,10 +319,15 @@ rec {
       nagelfar
       # }}} tcl #
       # rust {{{ #
+      evcxr
+      rustc
+      taplo
       manix
       nix-index-database
       tree-sitter
       nixpkgs-fmt
+      neocmakelsp
+      # pre-commit needs it
       cargo
       firefox
       # https://github.com/wez/wezterm/issues/792
@@ -310,18 +342,21 @@ rec {
       delta
       bat
       ripgrep
-      # https://github.com/NixOS/nixpkgs/issues/250306
-      # ripgrep-all
+      ripgrep-all
       bottom
       hexyl
       hyperfine
       texlab
       typst
+      typstfmt
       typst-lsp
+      asm-lsp
       # }}} rust #
       # go {{{ #
+      # pre-commit needs it
       go
       fq
+      jq-lsp
       actionlint
       fzf
       scc
@@ -335,15 +370,16 @@ rec {
       nix-build-uncached
       # }}} go #
       # shell {{{ #
+      emojify
       wgetpaste
       pass
       hr
       has
       lesspipe
-      # https://github.com/NixOS/nixpkgs/issues/257078
-      # bats
-      # bats.libraries.bats-support
-      # bats.libraries.bats-assert
+      bats
+      bats.libraries.bats-support
+      bats.libraries.bats-assert
+      blesh
       bash-completion
       zsh-completions
       zsh-powerlevel10k
@@ -362,78 +398,90 @@ rec {
       # }}} f# #
       # java {{{ #
       jdk
+      plantuml
       pdftk
       ltex-ls
       # }}} java #
       # c {{{ #
+      # info {{{ #
+      glxinfo
+      vulkan-tools
+      drm_info
+      clinfo
+      libinput
+      evtest
+      pciutils
+      usbutils
+      ethtool
+      psmisc
+      progress
+      dmidecode
+      # }}} info #
+      # build {{{ #
+      # meson needs it
+      pkg-config
       bear
+      # pre-comit call luarocks, then luarocks call it for building
+      gnumake
+      # }}} build #
+      # debug {{{ #
+      cgdb
+      gdb
+      rr
+      valgrind
+      nur.repos.Freed-Wu.gdb-prompt
+      # }}} debug #
+      # pyproject-build needs it
+      gcc
+      tmux
+      lsof
+      poppler_utils
       minicom
       socat
       nmap
-      glxinfo
-      clinfo
-      dpkg
-      rpm
-      pacman
-      fakeroot
-      libarchive
       fontconfig
       imagemagick
       sqlite
       hello
       lsb-release
-      gtk3
-      glib
-      xdotool
-      autoconf
-      automake
-      pkg-config
-      readline
-      gnumake
-      gcc
-      gdb
-      nur.repos.Freed-Wu.gdb-prompt
-      cgdb
       neomutt
       wget
       curl
       git
       subversion
-      tmux
       file
       dos2unix
-      dmidecode
       android-tools
       scrcpy
-      pciutils
-      usbutils
       texlive.combined.scheme-full
       linux-firmware
-      p7zip
+      (p7zip.override { enableUnfree = true; })
       w3m
       elinks
       jq
       acpi
       zathura
       ffmpeg
-      x264
       moreutils
       bc
       num-utils
       espeak-classic
-      gettext
-      progress
-      ethtool
+      nur.repos.Freed-Wu.tmux-rime
       # }}} c #
       # c++ {{{ #
+      krita
+      # neocmakelsp needs it
+      cmake
+      mesonlsp
+      openai-triton-llvm
+      libreoffice-fresh
+      # wpsoffice
+      watchman
+      cppcheck
       nixd
       qq
       clang-tools
-      gtest.dev
-      cmake
-      ninja
       cling
-      x265
       aria2
       lftp
       yuview
@@ -441,36 +489,35 @@ rec {
       chafa
       patchelf
       ansifilter
-      libreoffice-fresh
-      nur.repos.xddxdd.wechat-uos
+      wechat-uos
       nur.repos.linyinfeng.wemeet
-      # https://github.com/NixOS/nixpkgs/pull/243429
+      # TODO: https://github.com/NixOS/nixpkgs/pull/243429
       nur.repos.Freed-Wu.netease-cloud-music
+      # nur.repos.xddxdd.qqmusic
       # }}} c++ #
-      xsel
     ] ++ (lib.optionals services.xserver.desktopManager.gnome.enable
       [
-        gnome.gnome-tweaks
+        gnome-tweaks
         gnome-randr
+        # https://extensions.gnome.org/extension/5263/gtk4-desktop-icons-ng-ding/
         gnomeExtensions.gtk4-desktop-icons-ng-ding
         gnomeExtensions.clipboard-indicator
         gnomeExtensions.appindicator
         gnomeExtensions.screen-rotate
-        # https://github.com/NixOS/nixpkgs/pull/243032
-        nur.repos.Freed-Wu.g3kb-switch
       ]) ++ (lib.optionals
       (
-        hardware.opengl ? extraPackages && builtins.elem intel-compute-runtime hardware.opengl.extraPackages
+        hardware.graphics ? extraPackages && builtins.elem intel-compute-runtime hardware.graphics.extraPackages
       )
       [
         intel-gpu-tools
       ])
-    # wl-clipboard breaks vim / firefox
-    # ++ (
-    #   if services.xserver.displayManager.gdm ? wayland && ! services.xserver.displayManager.gdm.wayland then
-    #     [ xsel ]
-    #   else [ wl-clipboard ]
-    # )
+    ++ (
+      # wl-clipboard breaks vim / firefox
+      # if services.xserver.displayManager.gdm ? wayland && ! services.xserver.displayManager.gdm.wayland then
+      [ xsel ]
+      # https://github.com/YaLTeR/wl-clipboard-rs/issues/8
+      # else [ wl-clipboard ]
+    )
   ;
 
   # program {{{ #
@@ -485,9 +532,8 @@ rec {
   services.dockerRegistry.enableGarbageCollect = true;
   services.v2raya.enable = true;
 
+  programs.nix-ld.enable = true;
   programs.proxychains.enable = true;
-  # https://github.com/NixOS/nixpkgs/pull/222667
-  programs.proxychains.package = pkgs.proxychains-ng;
   programs.proxychains.proxies = {
     myproxy = {
       type = "socks5";
